@@ -1,0 +1,15 @@
+--project=BoltCast_AIES_LSTM
+--load_data
+--build_model
+--cpus_per_task=10
+--gpu
+--image_size
+4
+128
+256
+9
+--results_path=/ourdisk/hpc/ai2es/bmac87/BoltCast_ourdisk/results/AMS_2025/LSTM/
+--ckpt_path=/scratch/bmac87/BoltCast_scratch/model_ckpts/BoltCast_AIES_LSTM/
+--save_model
+--force
+--shuffle=0

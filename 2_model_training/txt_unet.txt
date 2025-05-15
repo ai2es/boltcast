@@ -1,0 +1,13 @@
+--deep=3
+--n_conv_per_step=3
+--conv_size=4
+--conv_nfilters
+32
+64
+128
+--pool=2
+--stride=1
+--padding=same
+--activation_conv=relu
+--activation_last=sigmoid
+--skip

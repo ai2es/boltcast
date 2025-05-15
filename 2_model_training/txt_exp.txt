@@ -1,0 +1,16 @@
+--epochs=500
+--lrate=.00001
+--loss=binary-cross-entropy
+--spatial_dropout=0.0
+--L2_reg=0.0
+--metrics=accuracy
+--early_stopping
+--min_delta=.0001
+--patience=10
+--monitor=val_loss
+--batch=32
+--prefetch=3
+--num_parallel_calls=4
+--cache=""
+--shuffle=0
+--no-repeat

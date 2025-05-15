@@ -1,0 +1,8 @@
+--lstm_conv_size=4
+--lstm_pool=2
+--lstm_stride=1
+--lstm_padding=same
+--lstm_conv_activation=relu
+--lstm_activation_last=sigmoid
+--return_sequences
+--return_state
