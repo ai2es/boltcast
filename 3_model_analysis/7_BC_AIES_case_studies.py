@@ -65,8 +65,18 @@ def get_GFS_30dbz(init_time='00Z',date_np64='06/17/2023 00:00'):
 def generate_variable_model_output_uno_gfs_model_run(rotation=4,
                                     lstm_deep=1,
                                     model_initialization_time = '12/06/2022 06:00:00',
-                                    loc_latlon=[90,90]):
-
+                                    loc_latlon=[90,90],
+                                    loc='vance'):
+    if loc=='vance':
+        day_4_label = '06 Dec 2022: f072-f093'
+        day_3_label = '07 Dec 2022: f048-f069'
+        day_2_label = '08 Dec 2022: f024-f045'
+        day_1_label = '09 Dec 2022: f000-f021'
+    else:
+        day_4_label = '10 Jun 2022: f072-f093'
+        day_3_label = '11 Jun 2022: f048-f069'
+        day_2_label = '12 Jun 2022: f024-f045'
+        day_1_label = '13 Jun 2022: f000-f021'
     #valid_times is a list of the model run initialization times
     test_ds, lat, lon, valid_times = get_test_ds(rotation=rotation)
     y_true_all_np = test_ds['y'].values
@@ -239,7 +249,7 @@ def generate_variable_model_output_uno_gfs_model_run(rotation=4,
     str_auc = f"{day_4_auc_unet:0.2f}"
     axes[0,0].set_xlabel('AUC: %s'%(str_auc))
     axes[0,0].set_ylabel('UNet',fontsize=18)
-    axes[0,0].set_title('Day 4',fontsize=18)
+    axes[0,0].set_title(day_4_label,fontsize=18)
 
     cb = axes[0,1].contourf(lon,lat,y_pred_unet_3*100,cmap=cmap,vmin=vmin,vmax=vmax)
     axes[0,1].add_feature(cfeature.COASTLINE,edgecolor=edgecolor,linewidth=.25)
@@ -248,7 +258,7 @@ def generate_variable_model_output_uno_gfs_model_run(rotation=4,
     axes[0,1].set_yticks([])
     str_auc = f"{day_3_auc_unet:0.2f}"
     axes[0,1].set_xlabel('AUC: %s'%(str_auc))
-    axes[0,1].set_title('Day 3',fontsize=18)
+    axes[0,1].set_title(day_3_label,fontsize=18)
 
     cb = axes[0,2].contourf(lon,lat,y_pred_unet_2*100,cmap=cmap,vmin=vmin,vmax=vmax)
     axes[0,2].add_feature(cfeature.COASTLINE,edgecolor=edgecolor,linewidth=.25)
@@ -257,7 +267,7 @@ def generate_variable_model_output_uno_gfs_model_run(rotation=4,
     axes[0,2].set_yticks([])
     str_auc = f"{day_2_auc_unet:0.2f}"
     axes[0,2].set_xlabel('AUC: %s'%(str_auc))
-    axes[0,2].set_title('Day 2',fontsize=18)
+    axes[0,2].set_title(day_2_label,fontsize=18)
 
     cb = axes[0,3].contourf(lon,lat,y_pred_unet_1*100,cmap=cmap,vmin=vmin,vmax=vmax)
     axes[0,3].add_feature(cfeature.COASTLINE,edgecolor=edgecolor,linewidth=.25)
@@ -266,7 +276,7 @@ def generate_variable_model_output_uno_gfs_model_run(rotation=4,
     axes[0,3].set_yticks([])
     str_auc = f"{day_1_auc_unet:0.2f}"
     axes[0,3].set_xlabel('AUC: %s'%(str_auc))
-    axes[0,3].set_title('Day 1',fontsize=18)
+    axes[0,3].set_title(day_1_label,fontsize=18)
 
     cb = axes[0,4].contourf(lon,lat,y_true*100,cmap='Greys',vmin=vmin,vmax=vmax)
     axes[0,4].add_feature(cfeature.COASTLINE,edgecolor=edgecolor,linewidth=.25)
@@ -394,12 +404,12 @@ def generate_variable_model_output_uno_gfs_model_run(rotation=4,
     title_str = 'Lightning Valid Time: %s'%(ams_date_str)
     plt.suptitle(title_str,fontsize=24)
     
-    save_dir = '/home/bmac87/BoltCast/3_model_analysis/case_studies/'
+    save_dir = '/home/bmac87/BoltCast/3_model_analysis/AIES_results_reviewer_edits/case_studies/'
     if os.path.isdir(save_dir)==False:
         os.makedirs(save_dir)
-    save_file = 'variable_model_output_%s_rot_%s.png'%(date_str,rotation)
+    save_file = '%s.png'%(loc)
     plt.savefig(save_dir+save_file)
-    save_file = 'variable_model_output_%s_rot_%s.pdf'%(date_str,rotation)
+    save_file = '%s.pdf'%(loc)
     plt.savefig(save_dir+save_file)
     plt.close()
 
@@ -408,32 +418,35 @@ def generate_variable_model_output_uno_gfs_model_run(rotation=4,
         cax=ax, 
         orientation='horizontal', 
         label='Lightning Probability (%)')
-    plt.savefig('./case_studies/multi_model_horizontal_colorbar_href.png')
-    plt.savefig('./case_studies/multi_model_horizontal_colorbar_href.pdf')
+    plt.savefig('/home/bmac87/BoltCast/3_model_analysis/AIES_results_reviewer_edits/case_studies/multi_model_horizontal_colorbar_href.png')
+    plt.savefig('/home/bmac87/BoltCast/3_model_analysis/AIES_results_reviewer_edits/case_studies/multi_model_horizontal_colorbar_href.pdf')
     plt.close()
 
     fig, ax = plt.subplots(figsize=(1, 6), layout='constrained')
     fig.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap=cmap),
         cax=ax, 
         orientation='vertical')
-    plt.savefig('./case_studies/multi_model_vertical_colorbar_href.png')
-    plt.savefig('./case_studies/multi_model_vertical_colorbar_href.pdf')
+    plt.savefig('/home/bmac87/BoltCast/3_model_analysis/AIES_results_reviewer_edits/case_studies/multi_model_vertical_colorbar_href.png')
+    plt.savefig('/home/bmac87/BoltCast/3_model_analysis/AIES_results_reviewer_edits/case_studies/multi_model_vertical_colorbar_href.pdf')
     plt.close()
 
 def main():
+    print('in the main function of 7_BC_AIES_case_studies.py')
     loc='wright_patt'
     loc_latlon = [39.819527, -84.067406+360]
     generate_variable_model_output_uno_gfs_model_run(rotation=4,
                                     lstm_deep=1,
                                     model_initialization_time = '06/10/2022 12:00:00',
-                                    loc_latlon = loc_latlon)
+                                    loc_latlon = loc_latlon,
+                                    loc=loc)
     
     loc = 'vance'
     loc_latlon = [36.3393, -97.9131+360]
     generate_variable_model_output_uno_gfs_model_run(rotation=4,
                                     lstm_deep=1,
                                     model_initialization_time = '12/06/2022 12:00:00',
-                                    loc_latlon = loc_latlon)
+                                    loc_latlon = loc_latlon,
+                                    loc = loc)
 
 if __name__ == "__main__":
     main()

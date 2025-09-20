@@ -7,10 +7,7 @@ import socket
 import matplotlib.pyplot as plt
 import shutil 
 import tensorflow as tf
-from tensorflow import keras
-from sklearn.metrics import confusion_matrix
-from sklearn.metrics import ConfusionMatrixDisplay
-from sklearn.metrics import precision_recall_curve, auc
+from sklearn.metrics import auc, precision_recall_curve
 import os
 from gewitter_functions import *
 import xarray as xr
@@ -44,7 +41,7 @@ def overall_gewitter_LSTM(lstm_deep=1):
     
     for conv_deep in conv_deeps:
         #plot it up  
-        fig, ax = plt.subplots(1,1,figsize=(10,8))
+        fig, ax = plt.subplots(1,1,figsize=(20,20))
         ax = make_performance_diagram_axis(ax, csi_cmap='Greys_r')
         colors = ['#fee5d9','#fcae91','#fb6a4a','#de2d26','#a50f15']
 
@@ -463,146 +460,126 @@ def daily_gewitter_LSTM(rotation=4,
     all_dict = {'day_1':day_1_dict,'day_2':day_2_dict,'day_3':day_3_dict,'day_4':day_4_dict}
     pickle.dump(all_dict,open('./daily_dict_rot_%s_conv_deep_%s_lstm_deep_%s.pkl'%(rotation,conv_deep,lstm_deep),'wb'))
 
-def AIES_gewitter(lstm_deep=1,conv_deep=1):
+def daily_gewitter_calc_AIES():
+    print('calculating the daily gewitter curves')
+    model_output_types = ['unet_all','lstm_all']
+    days = [0,1,2,3]
+    data = pickle.load(open('/scratch/bmac87/BC_reviewer_analysis/data.pkl','rb'))
+    y_true = data['y_all']
+    thresh = np.arange(0.05,1.05,0.05)
 
-    unet_csis = np.zeros((5,4,20))#rotation, day, number of thresholds
-    unet_srs = np.zeros((5,4,20))
-    unet_pods = np.zeros((5,4,20))
-    unet_aucs = np.zeros((5,4))#rotation, day
+    #initialize the arrays to store the statistics
+    csis = np.zeros((2,4,len(thresh)))#model, day, thresholds
+    aucs = np.zeros((2,4))#model,day
+    precision = np.zeros((2,4,len(thresh)))#model, day, thresholds
+    recall = np.zeros((2,4,len(thresh)))#model, day, thresholds
+    max_csi = np.zeros((2,4))#model, day
+    max_csi_thresholds = np.zeros((2,4))#model, day
 
-    lstm_csis = np.zeros((5,4,20))
-    lstm_srs = np.zeros((5,4,20))
-    lstm_pods = np.zeros((5,4,20))
-    lstm_aucs = np.zeros((5,4))
+    #statistics we need for performance diagram 
+    tp = tf.keras.metrics.TruePositives(thresholds=thresh.tolist())#a
+    fp = tf.keras.metrics.FalsePositives(thresholds=thresh.tolist())#b
+    fn = tf.keras.metrics.FalseNegatives(thresholds=thresh.tolist())#c
+    tn = tf.keras.metrics.TrueNegatives(thresholds=thresh.tolist())#d
 
-    for rotation in range(5):
+    for m,model in enumerate(model_output_types):
+        for d in days:
+            daily_pred = data[model][:,d,:,:]
+            daily_true = y_true[:,d,:,:]
 
-        dict_dir = './LSTM_daily_dict/'
-        lstm_dict = pickle.load(open(dict_dir+'daily_dict_rot_%s_conv_deep_%s_lstm_deep_%s.pkl'%(rotation,conv_deep,lstm_deep),'rb'))
-        dict_dir = './UNet_daily_dict/'
-        unet_dict = pickle.load(open(dict_dir+'daily_dict_rot_%s_unet.pkl'%(rotation),'rb'))
+            daily_tp = tp(daily_true,daily_pred)
+            daily_fp = fp(daily_true,daily_pred)
+            daily_fn = fn(daily_true,daily_pred)
+            daily_tn = tn(daily_true,daily_pred)
 
-        print(lstm_dict)
-        for day in range(1,5):
-            key_str = 'day_%s'%(day)
+            recall[m,d,:] = daily_tp/(daily_tp+daily_fn)
+            precision[m,d,:] = daily_tp/(daily_tp+daily_fp)
+            csis[m,d,:] = daily_tp/(daily_tp+daily_fn+daily_fp)
+
+            sk_precision, sk_recall, sk_thresholds = precision_recall_curve(y_true=np.ravel(daily_true),y_score=np.ravel(daily_pred))
+            aucs[m,d] = auc(sk_recall,sk_precision)
             
-            day_dict_unet = unet_dict[key_str]
-            day_dict_lstm = lstm_dict[key_str]
+            max_csi[m,d] = np.max(csis[m,d,:])
+            max_csi_idx = np.where(csis[m,d,:]==max_csi[m,d])[0]
+            max_csi_thresholds[m,d]=thresh[max_csi_idx]
+            
+            print(m,model,d,thresh[max_csi_idx],max_csi[m,d],aucs[m,d])
+            del daily_pred, daily_true, daily_tp, daily_fp, daily_fn, daily_tn,max_csi_idx
 
-            unet_csis[rotation,day-1,:] = day_dict_unet['csi']
-            lstm_csis[rotation,day-1,:] = day_dict_lstm['csi']
+    stats_dict = {
+        'recall':recall,
+        'precision':precision,
+        'csis':csis,
+        'aucs':aucs,
+        'max_csi':max_csi,
+        'max_csi_thresholds':max_csi_thresholds
+    }
+    pickle.dump(stats_dict,open('/scratch/bmac87/BC_reviewer_analysis/stats_dict.pkl','wb'))
+    del stats_dict
 
-            unet_pods[rotation,day-1,:] = day_dict_unet['pod']
-            lstm_pods[rotation,day-1,:] = day_dict_lstm['pod'] 
+def daily_gewitter_plot_AIES(lstm_deep=1,conv_deep=1):
 
-            unet_srs[rotation,day-1,:] = day_dict_unet['srs']
-            lstm_srs[rotation,day-1,:] = day_dict_lstm['srs']
-
-            unet_aucs[rotation,day-1] = day_dict_unet['auc']
-            lstm_aucs[rotation,day-1] = day_dict_lstm['auc']
+    #load the datom from daily_gewitter_calc_AIES()
+    stats_data = pickle.load(open('/ourdisk/hpc/ai2es/bmac87/BoltCast_ourdisk/results/AMS_2025/BC_reviewer_analysis/stats/stats_dict.pkl','rb'))
+    recall = stats_data['recall']
+    precision = stats_data['precision']
+    auc = stats_data['aucs']
+    print(recall.shape)
+    print(precision.shape)
+    print(auc.shape)
     
-    unet_auc_stds = np.std(unet_aucs,axis=0)
-    lstm_auc_stds = np.std(lstm_aucs,axis=0)
-
-    unet_csis = np.mean(unet_csis,axis=0)
-    lstm_csis = np.mean(lstm_csis,axis=0)
-
-    unet_srs = np.mean(unet_srs,axis=0)
-    lstm_srs = np.mean(lstm_srs,axis=0)
-
-    unet_pods = np.mean(unet_pods,axis=0)
-    lstm_pods = np.mean(lstm_pods,axis=0)
-
-    unet_aucs = np.mean(unet_aucs,axis=0)
-    lstm_aucs = np.mean(lstm_aucs,axis=0)
-
-    #plot it up  
-    fig, axes = plt.subplots(1,2,figsize=(30,15))#(x,y)
-
-    unet_ax = make_performance_diagram_axis(axes[0], csi_cmap='Greys')
-    lstm_ax = make_performance_diagram_axis(axes[1], csi_cmap='Greys')
-
     colors = ['#ca0020','#f4a582','#92c5de','#0571b0']  # Colorblind-friendly
     linestyles = ['dashed','dashdot','dotted','solid'] #np.flip(['-', '--', '-.', ':'])
     markers = ['s', 'o', '^', 'D']
     thresh = np.arange(0.05,1.05,0.05)
 
-    for i in range(4):
-        label = 'Day %s - $\mu$: %s, $\sigma$: %s'%((i+1),f"{unet_aucs[i]:.2f}",f"{unet_auc_stds[i]:.2f}")
-        max_idx = np.where(unet_csis[i,:]==max(unet_csis[i,:]))
-        print('max_unet_threshold_day_'+str(i+1))
-        print(thresh[max_idx])
-        unet_ax.plot(np.asarray(unet_srs[i,:]),np.asarray(unet_pods[i,:]),
-                    color=colors[i],
-                    marker=markers[i],
-                    markerfacecolor=colors[i],
-                    markeredgecolor='black',
-                    markersize=10,
-                    label=label,
-                    linestyle=linestyles[i],
-                    linewidth=3)
-        unet_ax.legend(loc='upper right')
-        unet_ax.set_title('UNet',fontsize=24,fontweight='bold')
-        unet_ax.text(.05,.9,'(a)',fontsize=24,fontweight='bold')
+    #plot it up  
+    fig, axes = plt.subplots(1,2,figsize=(30,10))#(x,y)
+    unet_ax = make_performance_diagram_axis(axes[0], csi_cmap='Greys')
+    lstm_ax = make_performance_diagram_axis(axes[1], csi_cmap='Greys')
 
-        label = 'Day %s - $\mu$: %s, $\sigma$: %s'%((i+1),f"{lstm_aucs[i]:.2f}",f"{lstm_auc_stds[i]:.2f}")
-        max_idx = np.where(lstm_csis[i,:]==max(lstm_csis[i,:]))
-        print('max_lstm_threshold_day_'+str(i+1))
-        print(thresh[max_idx])
-        lstm_ax.plot(np.asarray(lstm_srs[i,:]),np.asarray(lstm_pods[i,:]),'-s',
-                    color=colors[i],
-                    marker=markers[i],
-                    markerfacecolor=colors[i],
-                    markeredgecolor='black',
-                    markersize=10,
-                    label=label,
-                    linestyle=linestyles[i],
-                    linewidth=3)
-        lstm_ax.legend(loc='upper right')
-        lstm_ax.set_title('LSTM',fontsize=24,fontweight='bold')
-        lstm_ax.text(.05,.9,'(b)',fontsize=24,fontweight='bold')
-    plt.savefig('./performance_diagrams/UNet_LSTM_conv_deep_%s_lstm_deep_%s_AI2ES_mean.png'%(conv_deep,lstm_deep))
-    plt.savefig('./performance_diagrams/UNet_LSTM_conv_deep_%s_lstm_deep_%s_AI2ES_mean.pdf'%(conv_deep,lstm_deep))
+    for m in range(2):#model, 0 unet, 1 lstm
+        for i in range(4):#loop over days: 0,1,2,3
+            label = 'Day %s - AUC: %s'%((i+1),f"{auc[m,i]:.2f}")
+            axes[m].plot(precision[m,i,:],recall[m,i,:],
+                        color=colors[i],
+                        marker=markers[i],
+                        markerfacecolor=colors[i],
+                        markeredgecolor='black',
+                        markersize=10,
+                        label=label,
+                        linestyle=linestyles[i],
+                        linewidth=3)
+    axes[0].legend(loc='upper right')
+    axes[0].set_ylabel('Recall (POD)')
+    axes[0].set_xlabel('Precision (SR)')
+    axes[0].set_title('UNet',fontsize=24)
+    axes[0].text(.05,.9,'(a)',fontsize=24,fontweight='bold')
+    axes[1].legend(loc='upper right')
+    axes[1].set_title('LSTM',fontsize=24)
+    axes[1].text(.05,.9,'(b)',fontsize=24,fontweight='bold')
+    axes[1].set_ylabel('Recall (POD)')
+    axes[1].set_xlabel('Precision (SR)')
+    
+    for i,t in enumerate(thresh):
+        if i%2==0:
+            text = np.char.ljust(str(np.round(t+.05,2)),width=4,fillchar='0')
+            axes[0].text(precision[0,0,i+1]+0.02,recall[0,0,i+1]+0.01,text,path_effects=pe1,fontsize=18,color=colors[0])
+            axes[1].text(precision[1,0,i+1]+0.02,recall[1,0,i+1]+0.01,text,path_effects=pe1,fontsize=18,color=colors[0])
+
+            # if i<=15:
+            #     text = np.char.ljust(str(np.round(t,2)),width=4,fillchar='0')
+            #     axes[0].text(precision[1,-1,i]-0.06,recall[1,-1,i]-.04,text,path_effects=pe1,fontsize=18,color=colors[-1])
+            #     axes[1].text(precision[1,-1,i]-0.05,recall[1,-1,i]-0.04,text,path_effects=pe1,fontsize=18,color=colors[-1])
+    plt.savefig('./AIES_results_reviewer_edits/PD.pdf')
+    plt.savefig('./AIES_results_reviewer_edits/PD.png')
     plt.tight_layout()
     plt.close()
 
 if __name__=="__main__":
-
     visible_devices = tf.config.get_visible_devices('GPU') 
     n_visible_devices = len(visible_devices)
     print(n_visible_devices)
     tf.config.set_visible_devices([], 'GPU')
     print('GPU turned off')
-    
-    build_overall_plots = False
-    if build_overall_plots==True:
-        overall_gewitter_LSTM(lstm_deep=1)
-        overall_gewitter_LSTM(lstm_deep=2)
-        overall_gewitter_LSTM(lstm_deep=3)
-
-    build_daily_LSTM_plots = False
-    if build_daily_LSTM_plots==True:
-        conv_deeps = [0,1,2]
-        rotations  = [0,1,2,3,4]
-        lstm_deeps = [1,2,3]
-        for conv_deep in conv_deeps:
-            for lstm_deep in lstm_deeps:
-                for rotation in rotations:
-                    daily_gewitter_LSTM(rotation=rotation,
-                                        lstm_deep=lstm_deep,
-                                        conv_deep=conv_deep)
-    
-    build_daily_UNet_plots = False
-    if build_daily_UNet_plots == True:
-        rotations = [0,1,2,3,4]
-        for rotation in rotations:
-            daily_gewitter_UNet(rotation=rotation)
-
-    build_publication_plots = True
-    if build_publication_plots == True:
-        conv_deeps = [0,1,2]
-        lstm_deeps = [1,2,3]
-        for conv_deep in conv_deeps:
-            for lstm_deep in lstm_deeps:
-                AIES_gewitter(lstm_deep=lstm_deep,
-                                conv_deep=conv_deep)
+    daily_gewitter_plot_AIES()
