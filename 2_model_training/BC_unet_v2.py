@@ -12,13 +12,13 @@ def create_unet_input_tensor(args):
 
     print("building the input tensors")
     image_size = args.image_size
+    print('image_size:',image_size)
     input_tensor = tf.keras.Input(shape=(image_size[0],image_size[1],image_size[2],image_size[3]),
                                     dtype=tf.dtypes.float32,
                                         name='input_layer')
-
     return input_tensor
 
-def build_unet_input_block(input_tensor,args):
+def build_unet_input_block(tensor,args):
     
     #get the model parameters
     image_size = args.image_size
@@ -31,85 +31,23 @@ def build_unet_input_block(input_tensor,args):
     num_conv = args.n_conv_per_step
     drop = args.spatial_dropout
     
-    count=0
-    tensor = Conv3D(filters=16,
-                    kernel_size=(conv_size, conv_size, conv_size),
-                    kernel_regularizer=tf.keras.regularizers.l2(L2),
-                    strides=stride,
-                    activation=activation,
-                    input_shape=input_tensor.shape,
-                    padding=padding,
-                    dtype=tf.dtypes.float32,
-                    name='input_Conv_3D_%s_%s_%s_%s'%(activation,padding,conv_size,count))(input_tensor)
-    if drop>0:
-        tensor=SpatialDropout3D(rate=drop,
-                                dtype=tf.dtypes.float32,
-                                data_format='channels_last',
-                                name='input_drop_%s_%s'%(drop,count))(tensor)
-    count=1
-    for i in range(num_conv-1):
+    for i in range(num_conv):
+        kernel_time = tensor.shape[1]
         tensor = Conv3D(filters=16,
-                        kernel_size=(conv_size,conv_size,conv_size),
+                        kernel_size=(kernel_time, conv_size, conv_size),
                         kernel_regularizer=tf.keras.regularizers.l2(L2),
                         strides=stride,
                         activation=activation,
                         input_shape=tensor.shape,
                         padding=padding,
                         dtype=tf.dtypes.float32,
-                        name='input_Conv_3D_%s_%s_%s_%s'%(activation,padding,conv_size,count))(tensor)
-        if drop>0:
-            tensor=SpatialDropout3D(rate=drop,
-                            dtype=tf.dtypes.float32,
-                            data_format='channels_last',
-                            name='input_drop_%s_%s'%(drop,count))(tensor)
-        count=count+1
-    return tensor
-
-def build_unet_output_block(args,tensor):
-    #get the model parameters
-    image_size = args.image_size
-    padding=args.padding
-    activation=args.activation_conv
-    conv_size = args.conv_size
-    pool_size = args.pool
-    stride = args.stride
-    L2 = args.L2_reg
-    num_conv = args.n_conv_per_step
-    drop=args.spatial_dropout
-
-    count=0
-    tensor = Conv3D(filters=16,
-                    kernel_size=(conv_size, conv_size, conv_size),
-                    kernel_regularizer=tf.keras.regularizers.l2(L2),
-                    strides=stride,
-                    activation=activation,
-                    input_shape=tensor.shape,
-                    padding=padding,
-                    dtype=tf.dtypes.float32,
-                    name='output_Conv_3D_%s_%s_%s_%s'%(activation,padding,conv_size,count))(tensor)
-    if drop>0:
-        tensor=SpatialDropout3D(rate=drop,
-                                data_format='channels_last',
-                                dtype=tf.dtypes.float32,
-                                name='output_drop_%s_%s'%(drop,count))(tensor)
+                        name='input_block_%s_kernel_2d_%s_kernel_time_%s_num_layer_%s'%(activation,conv_size,kernel_time,i))(tensor)
     
-    count=1
-    for i in range(num_conv-1):
-        tensor = Conv3D(filters=16,
-                        kernel_size=(conv_size,conv_size,conv_size),
-                        kernel_regularizer=tf.keras.regularizers.l2(L2),
-                        strides=stride,
-                        activation=activation,
-                        input_shape=tensor.shape,
-                        padding=padding,
+    if drop>0:
+        tensor=SpatialDropout3D(rate=drop,
                         dtype=tf.dtypes.float32,
-                        name='outut_Conv_3D_%s_%s_%s_%s'%(activation,padding,conv_size,count))(tensor)
-        if drop>0:
-            tensor = SpatialDropout3D(rate=drop,
-                                        dtype=tf.dtypes.float32,
-                                        data_format='channels_last',
-                                        name='output_drop_%s_%s'%(drop,count))(tensor)
-        count=count+1
+                        data_format='channels_last',
+                        name='input_block_drop_%s'%(drop))(tensor)
     return tensor
 
 def build_unet_encoder(args,tensor):
@@ -127,33 +65,30 @@ def build_unet_encoder(args,tensor):
     L2 = args.L2_reg
     deep = args.deep
 
-    print('encoder input shape:',tensor.shape)
-    print('encoder filters:',filter_list)
-    print('num Conv3D per layer:',num_conv)
-    print('deep:',deep)
-
     conv3d_count = 0
     tensor_stack = []
     for f,filter in enumerate(filter_list):
         for n in range(num_conv):
             print(f,filter,n)
+            kernel_time = tensor.shape[1]
             tensor = Conv3D(filters=filter,
-                        kernel_size=(conv_size,conv_size,conv_size),
+                        kernel_size=(kernel_time,conv_size,conv_size),
                         kernel_regularizer=tf.keras.regularizers.l2(L2),
                         strides=stride,
                         activation=activation,
                         input_shape=tensor.shape,
                         padding=padding,
                         dtype=tf.dtypes.float32,
-                        name='Enconder_Conv_3D_%s_%s_%s'%(activation,padding,conv3d_count))(tensor)
-            if drop>0:
-                tensor=SpatialDropout3D(rate=drop,
-                                dtype=tf.dtypes.float32,
-                                data_format='channels_last',
-                                name='Encoder_Drop_3D_%s_%s'%(drop,conv3d_count))(tensor)
+                        name='Enconder_%s_2d_kernel_%s_kernel_time_%s_num_layer_%s'%(activation,conv_size,kernel_time,conv3d_count))(tensor)
             if n==(num_conv-1):
                 tensor_stack.append(tensor)
             conv3d_count+=1
+        
+        if drop>0:
+            tensor=SpatialDropout3D(rate=drop,
+                                dtype=tf.dtypes.float32,
+                                data_format='channels_last',
+                                name='Encoder_Drop_3D_%s_%s'%(drop,f))(tensor)
 
         if f<=1:
             print("trying 3D pooling")
@@ -178,55 +113,65 @@ def build_unet_decoder(args,tensor,encoder_tensor_stack):
     drop = args.spatial_dropout
     L2 = args.L2_reg
 
-    print("building decoder")
-    print("are we skipping? ",skip)
     conv3d_count=0
     upsample_count=0
     encoder_tensor_stack.pop()
     for f,filter in enumerate(filter_list):
         for n in range(num_conv):
             print(f,filter,n)
+            kernel_time = tensor.shape[1]
             tensor = Conv3D(filters=filter,
-                        kernel_size=(conv_size,conv_size,conv_size),
+                        kernel_size=(kernel_time,conv_size,conv_size),
                         kernel_regularizer=tf.keras.regularizers.l2(L2),
                         strides=stride,
                         activation=activation,
                         input_shape=tensor.shape,
                         padding=padding,
                         dtype=tf.dtypes.float32,
-                        name='Decoder_Conv_3D_%s_%s_%s'%(activation,padding,conv3d_count))(tensor)
-            if drop>0:
-                tensor=SpatialDropout3D(rate=drop,
-                                        dtype=tf.dtypes.float32,
-                                        data_format='channels_last',
-                                        name='Decoder_Drop_3D_%s_%s'%(drop,conv3d_count))(tensor)
-            
-            
+                        name='Decoder_%s_kernel_2d_%s_kernel_time_%s_num_layer_%s'%(activation,conv_size,kernel_time,conv3d_count))(tensor)
             conv3d_count=conv3d_count+1
-
+        if drop>0:
+            tensor=SpatialDropout3D(rate=drop,
+                                    dtype=tf.dtypes.float32,
+                                    data_format='channels_last',
+                                    name='Decoder_Drop_3D_%s_%s'%(drop,f))(tensor)
         if f<=1:
             tensor = UpSampling3D(size=(pool_size,pool_size,pool_size),
                                     name='Decoder_UpSample_%s'%(upsample_count))(tensor)
             upsample_count=upsample_count+1
-
             if skip==True:
                 tensor = Concatenate()([tensor, encoder_tensor_stack.pop()])
-                tensor = Conv3D(filters=filter,
-                        kernel_size=(conv_size,conv_size,conv_size),
+    return tensor
+
+def build_unet_output_block(args,tensor):
+
+    #get the model parameters
+    image_size = args.image_size
+    padding=args.padding
+    activation=args.activation_conv
+    conv_size = args.conv_size
+    pool_size = args.pool
+    stride = args.stride
+    L2 = args.L2_reg
+    num_conv = args.n_conv_per_step
+    drop=args.spatial_dropout
+
+    for n in range(num_conv):
+        kernel_time = tensor.shape[1]
+        tensor = Conv3D(filters=16,
+                        kernel_size=(kernel_time, conv_size, conv_size),
                         kernel_regularizer=tf.keras.regularizers.l2(L2),
                         strides=stride,
                         activation=activation,
                         input_shape=tensor.shape,
                         padding=padding,
                         dtype=tf.dtypes.float32,
-                        name='Decoder_Conv_3D_%s_%s_%s'%(activation,padding,conv3d_count))(tensor)
-                if drop>0:
-                    tensor=SpatialDropout3D(rate=drop,
-                                            data_format='channels_last',
-                                            dtype=tf.dtypes.float32,
-                                            name='Decoder_drop_%s_%s'%(drop,conv3d_count))(tensor)
-                conv3d_count=conv3d_count+1
-
+                        name='output_block_%s_kernel_2d_%s_kernel_time_%s_%s'%(activation,conv_size,kernel_time,n))(tensor)
+    if drop>0:
+        tensor=SpatialDropout3D(rate=drop,
+                                dtype=tf.dtypes.float32,
+                                data_format='channels_last',
+                                name='OutputBlock_Drop_3D_%s'%(drop))(tensor)
     return tensor
 
 def create_stacked_unet(args):
@@ -237,34 +182,33 @@ def create_stacked_unet(args):
     conv_size = args.conv_size
     stride = args.stride
     padding=args.padding
-    lrate = args.lrate
-    loss = args.loss
-    metrics = args.metrics
     
 
     #create the input layer and layer normalize
-    input_tensor = create_unet_input_tensor(args)
+    input_tensor = create_unet_input_tensor(args=args)
+    print('input_tensor.shape[1]',input_tensor.shape[1])
 
     #create the input block to learning across the time dimension
-    tensor = build_unet_input_block(input_tensor,args)
+    tensor = build_unet_input_block(tensor=input_tensor,args=args)
 
     # build the encoder
     tensor, encoder_tensor_stack = build_unet_encoder(args,tensor)#self declared function
 
-    #build the decoder
+    # #build the decoder
     tensor = build_unet_decoder(args,tensor,encoder_tensor_stack)#self declared function
 
     #generate an additional layer to convolve the ouputs for symmetry
     tensor = build_unet_output_block(args,tensor)
 
     #generate the output layer (4-days of lightning)
+    kernel_time = tensor.shape[1]
     output_tensor = Conv3D(filters = 1,
                             input_shape=tensor.shape,
                             dtype=tf.dtypes.float32,
                             activation=activation_last,
                             strides=stride,
                             padding=padding,
-                            kernel_size=(conv_size,conv_size,conv_size))(tensor)
+                            kernel_size=(kernel_time,conv_size,conv_size))(tensor)
     model = Model(inputs=input_tensor,outputs=output_tensor)
     return model
 
@@ -281,5 +225,5 @@ if __name__ == "__main__":
     print(args)
 
     model = create_stacked_unet(args)
-    plot_model(model, to_file='test_unet.png', show_shapes=True, show_layer_names=True)
+    plot_model(model, to_file='unet_v2.png', show_shapes=True, show_layer_names=True)
     print(model.summary())

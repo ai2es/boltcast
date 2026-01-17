@@ -6,3 +6,6 @@
 --lstm_activation_last=sigmoid
 --return_sequences
 --return_state
+--lstm_conv_deep=0
+--lstm_deep=1
+--spatial_dropout=0.0

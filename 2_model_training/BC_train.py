@@ -7,15 +7,16 @@ import socket
 import matplotlib.pyplot as plt
 import shutil 
 import os
-
 import tensorflow as tf
 from tensorflow import keras
 
 #import BoltCast specific code
 from BC_parser import *
-from BC_unet import *
-from BC_convLSTM import *
+from BC_unet_v2 import *
+from BC_convLSTM_v2 import *
 from BC_data_loader import * 
+
+import time
 
 #################################################################
 # Default plotting parameters
@@ -43,22 +44,15 @@ def generate_fname(args):
     The approach is to encode the key experimental parameters in the file name.  This
     way, they are unique and easy to identify after the fact.
     '''
+    
     fname = 'BC_%s_rot_%s'%(args.model2train,args.rotation)
-
     label_str = args.label
-
-    if args.model2train=='LSTM':
-        conv_str = '_conv_%s'%args.lstm_conv_size
-        conv_deep = '_conv_deep_%s'%args.lstm_conv_deep
-        lstm_deep = '_lstm_deep_%s'%args.lstm_deep
-
-    if args.model2train=='UNet':
-        conv_str = '_conv_%s'%args.conv_size
-        conv_deep = '_conv_deep_%s'%args.deep
-        lstm_deep = ''
+    if label_str==None:
+        label_str=''
+    lrate_str = '_lrate_%s_'%(f"{args.lrate:.09f}")
 
     # Put it all together, including #of training folds and the experiment rotation
-    return fname+conv_str+conv_deep+lstm_deep+label_str
+    return fname+lrate_str+label_str
 
 def execute_exp(args=None, multi_gpus=False):
 
@@ -87,9 +81,8 @@ def execute_exp(args=None, multi_gpus=False):
         print('shuffle:',args.shuffle)
 
         ds_train, ds_val, ds_test = load_data_from_tfds(rotation=args.rotation, 
-                                                base_dir='/ourdisk/hpc/ai2es/bmac87/BoltCast_ourdisk/data/tfds/',
-                                                batch_size=args.batch,
-                                                shuffle=args.shuffle)
+                                                base_dir=args.data_path,
+                                                batch_size=args.batch)
 
     ####################################################
     # Output file base and pkl file
@@ -97,8 +90,6 @@ def execute_exp(args=None, multi_gpus=False):
     print(fbase)
     fname_out = "%s_results.pkl"%fbase
     print(fname_out)
-
-    
 
     # Check if output file already exists
     if not args.force and os.path.exists(fname_out):
@@ -152,10 +143,11 @@ def execute_exp(args=None, multi_gpus=False):
                                                         min_delta=args.min_delta, monitor=args.monitor)
         cbs.append(early_stopping_cb)
     
-    ckpt_dir = args.ckpt_path
+    args.results_path = args.results_path+args.project+'/'+fbase+'/'
+    ckpt_dir = args.results_path
     if os.path.isdir(ckpt_dir)==False:
         os.makedirs(ckpt_dir)
-    ckpt_fname = fname_out[:-12]+'_checkpoint.model.keras'
+    ckpt_fname = 'checkpoint.model.keras'
     print('checkpoint info')
     print(ckpt_dir+ckpt_fname)
     cbs.append(tf.keras.callbacks.ModelCheckpoint(filepath=ckpt_dir+ckpt_fname,
@@ -236,6 +228,7 @@ def execute_exp(args=None, multi_gpus=False):
                     print("NO GO")
                     return
     
+    start_clock = time.time()
     history = model.fit(ds_train,
                         batch_size = args.batch,
                         epochs=args.epochs,
@@ -243,71 +236,41 @@ def execute_exp(args=None, multi_gpus=False):
                         verbose=args.verbose>=2,
                         validation_data = ds_val,
                         callbacks=cbs)
-
-    # Done training
+    end_clock = time.time()
+    train_mins = (end_clock-start_clock)/60
+    print('model.fit time:',train_mins,'minutes')
     print('Done Training')
     # Generate results data
     results = {}
     results['history'] = history.history
     results['config']  = config_dict
-    print('Predicting the model')
     
     # Save results
+    print('saving the results')
     fbase = generate_fname(args)
     results['fname_base'] = fbase
     if os.path.isdir(args.results_path)==False:
         os.makedirs(args.results_path)
-    with open(args.results_path+"%s_results.pkl"%(fbase), "wb") as fp:
+    with open(args.results_path+"results.pkl", "wb") as fp:
         pickle.dump(results, fp)
+    print('results saved successfully')
     
     # Save model
     if args.save_model:
         print('saving the model')
-        model_dir = args.results_path+'models/'
+        model_dir = args.results_path
         if os.path.isdir(model_dir)==False:
             os.makedirs(model_dir)
-        model.save(model_dir+"%s_model.keras"%(fbase))
+        model.save(model_dir+"model.keras")
+        print('model saved successfully')
     wandb.finish()
-
     return model
 
 def main():
-
     # Parse and check incoming arguments
     parser = create_parser()
     args = parser.parse_args()
     check_args(args)
-
-    #load the experiment infor
-    print('loading the experiment for str(args.exp):',args.exp)
-    if args.exp==1:
-        args.rotation = 0
-        args.lstm_deep = 3
-        args.lstm_conv_deep = 2
-    if args.exp==2:
-        args.rotation = 2
-        args.lstm_deep = 3
-        args.lstm_conv_deep = 2
-    if args.exp==3:
-        args.rotation = 0
-        args.lstm_deep = 2
-        args.lstm_conv_deep = 2
-    if args.exp==4:
-        args.rotation = 1
-        args.lstm_deep = 2
-        args.lstm_conv_deep = 2
-    if args.exp==5:
-        args.rotation = 4
-        args.lstm_deep = 2
-        args.lstm_conv_deep = 2
-    print(args.rotation,args.lstm_deep,args.lstm_conv_deep)
-
-    # model_check = '/ourdisk/hpc/ai2es/bmac87/BoltCast_ourdisk/results/AMS_2025/LSTM/models/'
-    # fcheck = 'BC_LSTM_rot_%s_conv_4_conv_deep_%s_lstm_deep_%s_no_drop_no_shuffle_model.keras'%(args.rotation,args.lstm_conv_deep,args.lstm_deep)
-    # print('checking:',fcheck)
-    # if os.path.isfile(model_check+fcheck):
-    #     print('already trained:',fcheck)
-    #     return
 
     if args.verbose >= 3:
         print('Arguments parsed')
@@ -336,7 +299,8 @@ def main():
     if args.cpus_per_task is not None:
         tf.config.threading.set_intra_op_parallelism_threads(args.cpus_per_task)
         tf.config.threading.set_inter_op_parallelism_threads(args.cpus_per_task)
-    execute_exp(args, multi_gpus=n_visible_devices)
+    model = execute_exp(args, multi_gpus=n_visible_devices)
+    print('BC_Train.py complete')
 
 if __name__ == "__main__":
     main()

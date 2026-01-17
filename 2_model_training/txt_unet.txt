@@ -1,3 +1,9 @@
+--image_size
+4
+128
+256
+9
+--L2_reg=0.0
 --deep=3
 --n_conv_per_step=3
 --conv_size=4
@@ -10,4 +16,5 @@
 --padding=same
 --activation_conv=relu
 --activation_last=sigmoid
+--spatial_dropout=0.0
 --skip

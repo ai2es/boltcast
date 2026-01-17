@@ -138,5 +138,5 @@ if __name__ == "__main__":
         print('building the model')
         model = create_LSTM(args)
         print(model.summary())
-        # plot_model(model, to_file='test_csltm.png', show_shapes=True, show_layer_names=True)
+        plot_model(model, to_file='test_csltm.png', show_shapes=True, show_layer_names=True)
         
