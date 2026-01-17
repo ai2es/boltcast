@@ -6,9 +6,11 @@ import pickle
 import sys
 import xarray as xr
 
+
+
 def main():
 
-    var = 'binary_ltg'
+    var = 'fed'
     ds_dir = '/ourdisk/hpc/ai2es/bmac87/BoltCast_ourdisk/data/9_ds/'+var+'/'
     init_times = ['00Z','06Z','12Z','18Z']
 
@@ -70,15 +72,17 @@ def main():
             final_ds = xr.concat(data_list,data_vars='all',dim='valid_times')
             del data_list
             fsave = '%s_%s.nc'%(season,s)
-            save_dir = '/ourdisk/hpc/ai2es/bmac87/BoltCast_ourdisk/data/10_folds_ds/'
+            save_dir = '/ourdisk/hpc/ai2es/bmac87/BoltCast_ourdisk/data/10_folds_ds/'+var+'/'
+            if os.path.isdir(save_dir)==False:
+                os.makedirs(save_dir)
             final_ds.to_netcdf(save_dir+fsave,engine='netcdf4')
             
-            if s==0:
-                print(final_ds['x'].shape)
-                for vt in final_ds['valid_times'].values:
-                    print(vt)
-            else:
-                print(final_ds['x'].shape)
+            # if s==0:
+            #     print(final_ds['x'].shape)
+            #     for vt in final_ds['valid_times'].values:
+            #         print(vt)
+            # else:
+            #     print(final_ds['x'].shape)
             del final_ds
 
 if __name__=="__main__":
