@@ -4,7 +4,7 @@ import glob
 import shutil
 import argparse
 
-# aws s3 cp s3://noaa-goes16/<Product>/<Year>/<Day of Year>/<Hour>/<Filename> . --no-sign-request
+#aws s3 cp s3://noaa-goes16/<Product>/<Year>/<Day of Year>/<Hour>/<Filename> . --no-sign-request
 def main():
 
     parser = argparse.ArgumentParser()
@@ -26,6 +26,8 @@ def main():
         yr='2023'
     elif args['year']==6:
         yr='2024'
+    elif args['year']==0:
+        yr='2018'
     else:
         yr='2025'
 
@@ -66,7 +68,7 @@ def main():
                 
                 try:
                     files = s3.ls(mybucket)
-                    save_path = '/scratch/bmac87/GLM/'+sat+'/'+yr+'/'+d+'/'
+                    save_path = '/ourdisk/hpc/ai2es/datasets/GLM/'+sat+'/'+yr+'/'+d+'/'
                     if not os.path.exists(save_path):
                         os.makedirs(save_path)
                     if args['download']:

@@ -9,11 +9,10 @@
 #SBATCH --mail-user=bmac7167@ou.edu
 #SBATCH --mail-type=ALL
 #SBATCH --chdir=/home/bmac87/BoltCast/0_data_acquisition/
-#SBATCH --array=6,7
+#SBATCH --array=0
 #SBATCH --time=96:00:00
 
 module load Python/3.10.8-GCCcore-12.2.0
 source /home/bmac87/BoltCast/BC_env/bin/activate
 
-python s3fs_glm.py --year=$SLURM_ARRAY_TASK_ID --sat=G18 --download
-python s3fs_glm.py --year=$SLURM_ARRAY_TASK_ID --sat=G16 --download
+python s3fs_glm.py --year=$SLURM_ARRAY_TASK_ID --sat=G17 --download
