@@ -12,4 +12,6 @@ Python packages are included in the text file.
 
 Sample model output is included in the BC_output.mov file, recognizing the file size limitations in GitHub. 
 
+Line by line diagrams are included from the corresponding paper. <INSERT HYPERLINK WHEN PUBLISHED>
+
 Please reach out to bmac7167@gmail.com if you need assistance in reviewing this repository. 
